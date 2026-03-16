@@ -19,6 +19,11 @@ const SLOT_LABELS = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Even
 
 // Popover state
 let popoverContext = null; // { volunteerId, shiftId, shiftDate, dayOfWeek, timeSlot }
+let subPopoverContext = null; // { awayVolunteerId, shiftId, shiftDate, dayOfWeek, timeSlot }
+
+// Admin state
+let adminMonday = getMonday(new Date());
+let adminAttendanceCache = [];
 
 // ============================================================
 // INIT
@@ -189,7 +194,8 @@ function renderShiftChips(dayOfWeek, timeSlot, dateStr) {
     );
     const status = att ? att.status : 'attending';
     const notes = att?.notes || '';
-    const needsSub = status === 'away' && !subs.some(s => s.sub_for_id === vol.id);
+    const hasSub = subs.some(s => s.sub_for_id === vol.id);
+    const needsSub = status === 'away' && !hasSub;
 
     let label = esc(vol.first_name);
     if (notes) label += ` <span class="sub-label">(${esc(notes)})</span>`;
@@ -197,10 +203,33 @@ function renderShiftChips(dayOfWeek, timeSlot, dateStr) {
     html += `<span class="chip chip-${status} ${needsSub ? 'chip-needs-sub' : ''}"
       onclick="openAttendancePopover('${vol.id}', '${shift.id}', '${dateStr}', ${dayOfWeek}, '${timeSlot}')"
       title="${status}${notes ? ': ' + notes : ''}">${label}</span>`;
+
+    // Show the sub for this volunteer, or a "+ Sub" button
+    if (status === 'away') {
+      const sub = subs.find(s => s.sub_for_id === vol.id);
+      if (sub) {
+        const subVol = volunteersCache.find(v => v.id === sub.volunteer_id);
+        if (subVol) {
+          html += `<span class="chip chip-sub"
+            onclick="openAttendancePopover('${subVol.id}', '${shift.id}', '${dateStr}', ${dayOfWeek}, '${timeSlot}')"
+            >${esc(subVol.first_name)}<span class="sub-label"> (sub)</span></span>`;
+        }
+      } else {
+        html += `<span class="chip chip-add-sub"
+          onclick="openSubPopover('${vol.id}', '${shift.id}', '${dateStr}', ${dayOfWeek}, '${timeSlot}')"
+          >+ Sub</span>`;
+      }
+    }
   }
 
-  // Show subs
+  // Show subs that aren't linked to a specific away volunteer
   for (const sub of subs) {
+    if (assigned.some(v => {
+      const att = attendanceCache.find(a =>
+        a.shift_id === shift.id && a.volunteer_id === v.id && a.shift_date === dateStr
+      );
+      return att?.status === 'away' && sub.sub_for_id === v.id;
+    })) continue; // already shown inline above
     const subVol = volunteersCache.find(v => v.id === sub.volunteer_id);
     const forVol = volunteersCache.find(v => v.id === sub.sub_for_id);
     if (!subVol) continue;
@@ -243,41 +272,61 @@ function openAttendancePopover(volunteerId, shiftId, shiftDate, dayOfWeek, timeS
   // Notes
   document.getElementById('popover-notes').value = att?.notes || '';
 
-  // Sub picker - show when status is "away" for non-assigned volunteer looking to sub
-  updateSubPicker(currentStatus, shiftId, shiftDate);
-
   document.getElementById('attendance-popover').classList.add('active');
 }
 
-function updateSubPicker(status, shiftId, shiftDate) {
-  const section = document.getElementById('sub-picker-section');
-  const select = document.getElementById('sub-picker-select');
+// ============================================================
+// SUB POPOVER
+// ============================================================
 
-  if (status === 'away') {
-    section.style.display = 'none';
-    return;
-  }
+function openSubPopover(awayVolunteerId, shiftId, shiftDate, dayOfWeek, timeSlot) {
+  subPopoverContext = { awayVolunteerId, shiftId, shiftDate, dayOfWeek, timeSlot };
 
-  // Check if this volunteer is subbing for someone
-  const att = attendanceCache.find(a =>
-    a.shift_id === popoverContext.shiftId &&
-    a.volunteer_id === popoverContext.volunteerId &&
-    a.shift_date === popoverContext.shiftDate
-  );
+  const awayVol = volunteersCache.find(v => v.id === awayVolunteerId);
+  document.getElementById('sub-popover-for').textContent = awayVol?.first_name || 'Unknown';
+  document.getElementById('sub-popover-shift-info').textContent =
+    `${DAY_NAMES[dayOfWeek]} ${SLOT_LABELS[timeSlot]} — ${fmtDateShort(new Date(shiftDate + 'T00:00:00'))}`;
 
-  if (att?.sub_for_id) {
-    section.style.display = 'block';
-    // Populate with away volunteers
-    const awayVols = attendanceCache
-      .filter(a => a.shift_id === shiftId && a.shift_date === shiftDate && a.status === 'away')
-      .map(a => volunteersCache.find(v => v.id === a.volunteer_id))
-      .filter(Boolean);
+  // Populate volunteer dropdown (active volunteers not already assigned to this shift)
+  const shift = shiftsCache.find(s => s.id === shiftId);
+  const assignedIds = shift ? assignmentsCache.filter(a => a.shift_id === shift.id).map(a => a.volunteer_id) : [];
+  const available = volunteersCache.filter(v => v.is_active && !assignedIds.includes(v.id));
 
-    select.innerHTML = '<option value="">No substitute</option>' +
-      awayVols.map(v => `<option value="${v.id}" ${att.sub_for_id === v.id ? 'selected' : ''}>${esc(v.first_name)}</option>`).join('');
-  } else {
-    section.style.display = 'none';
-  }
+  const select = document.getElementById('sub-volunteer-select');
+  select.innerHTML = '<option value="">Select a volunteer...</option>' +
+    available.map(v => `<option value="${v.id}">${esc(v.first_name)}</option>`).join('');
+
+  document.getElementById('sub-popover-notes').value = '';
+  document.getElementById('sub-popover').classList.add('active');
+}
+
+async function saveSub() {
+  if (!subPopoverContext) return;
+
+  const subVolunteerId = document.getElementById('sub-volunteer-select').value;
+  if (!subVolunteerId) { return; }
+
+  const notes = document.getElementById('sub-popover-notes').value.trim() || null;
+  const { awayVolunteerId, shiftId, shiftDate } = subPopoverContext;
+
+  // Create attendance record for the sub
+  await sb.from('attendance').upsert({
+    shift_id: shiftId,
+    volunteer_id: subVolunteerId,
+    shift_date: shiftDate,
+    status: 'attending',
+    sub_for_id: awayVolunteerId,
+    notes: notes,
+  }, { onConflict: 'shift_id,volunteer_id,shift_date' });
+
+  closeSubPopover();
+  await loadWeek(currentMonday);
+  renderSchedule();
+}
+
+function closeSubPopover() {
+  document.getElementById('sub-popover').classList.remove('active');
+  subPopoverContext = null;
 }
 
 async function saveAttendance() {
@@ -450,10 +499,10 @@ async function signOutAdmin() {
   updateAuthStatus();
 }
 
-function showAdminContent() {
+async function showAdminContent() {
   document.getElementById('admin-login-section').style.display = 'none';
   document.getElementById('admin-content').style.display = 'block';
-  renderAdminOverview();
+  await loadAdminWeek(adminMonday);
   renderVolunteerTable();
 }
 
@@ -468,10 +517,33 @@ function hideAdminContent() {
   document.getElementById('admin-login-status').textContent = '';
 }
 
+async function loadAdminWeek(monday) {
+  adminMonday = monday;
+  const friday = addDays(monday, 4);
+  const mondayStr = fmtDateISO(monday);
+  const fridayStr = fmtDateISO(friday);
+
+  const { data } = await sb.from('attendance').select('*')
+    .gte('shift_date', mondayStr)
+    .lte('shift_date', fridayStr);
+  adminAttendanceCache = data || [];
+
+  renderAdminWeekLabel();
+  renderAdminOverview();
+}
+
+function renderAdminWeekLabel() {
+  const friday = addDays(adminMonday, 4);
+  const opts = { month: 'short', day: 'numeric' };
+  const monStr = adminMonday.toLocaleDateString('en-US', opts);
+  const friStr = friday.toLocaleDateString('en-US', opts);
+  document.getElementById('admin-week-label').textContent = `${monStr} – ${friStr}`;
+}
+
 function renderAdminOverview() {
   const container = document.getElementById('admin-overview');
 
-  // Count stats for this week
+  // Count stats for the admin-selected week
   let totalExpected = 0;
   let attending = 0;
   let away = 0;
@@ -486,14 +558,14 @@ function renderAdminOverview() {
       const assigned = assignmentsCache.filter(a => a.shift_id === shift.id);
       totalExpected += assigned.length;
 
-      const dateStr = fmtDateISO(addDays(currentMonday, d));
+      const dateStr = fmtDateISO(addDays(adminMonday, d));
       for (const a of assigned) {
-        const att = attendanceCache.find(r =>
+        const att = adminAttendanceCache.find(r =>
           r.shift_id === shift.id && r.volunteer_id === a.volunteer_id && r.shift_date === dateStr
         );
         if (att?.status === 'away') {
           away++;
-          const hasSub = attendanceCache.some(r =>
+          const hasSub = adminAttendanceCache.some(r =>
             r.shift_id === shift.id && r.shift_date === dateStr && r.sub_for_id === a.volunteer_id
           );
           if (hasSub) subsCount++;
@@ -698,6 +770,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.id === 'attendance-popover') closeAttendancePopover();
   });
 
+  // Sub popover
+  document.getElementById('sub-popover-save').addEventListener('click', saveSub);
+  document.getElementById('sub-popover-cancel').addEventListener('click', closeSubPopover);
+  document.getElementById('sub-popover').addEventListener('click', (e) => {
+    if (e.target.id === 'sub-popover') closeSubPopover();
+  });
+
   // My Shifts volunteer select
   document.getElementById('my-volunteer-select').addEventListener('change', (e) => {
     renderMyShifts(e.target.value);
@@ -708,6 +787,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('admin-signout-btn').addEventListener('click', signOutAdmin);
   document.getElementById('add-volunteer-btn').addEventListener('click', openAddVolunteer);
   document.getElementById('volunteer-form').addEventListener('submit', submitVolunteerForm);
+
+  // Admin week nav
+  document.getElementById('admin-prev-week').addEventListener('click', () => loadAdminWeek(addDays(adminMonday, -7)));
+  document.getElementById('admin-next-week').addEventListener('click', () => loadAdminWeek(addDays(adminMonday, 7)));
+  document.getElementById('admin-today-btn').addEventListener('click', () => loadAdminWeek(getMonday(new Date())));
 
   // Modal overlay click to close
   document.addEventListener('click', (e) => {

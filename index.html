@@ -190,6 +190,13 @@
     .chip-sub { background: var(--info-light); color: var(--info); border-color: var(--info); }
     .chip-needs-sub { border-style: dashed; }
     .chip .sub-label { font-size: 11px; margin-left: 4px; opacity: 0.8; }
+    .chip-add-sub {
+      background: var(--info-light);
+      color: var(--info);
+      border: 1.5px dashed var(--info);
+      font-size: 12px;
+      padding: 4px 8px;
+    }
 
     /* Popover for attendance entry */
     .popover-overlay {
@@ -473,6 +480,7 @@
     <button class="tab-btn active" data-page="schedule">Schedule</button>
     <button class="tab-btn" data-page="my-shifts">My Shifts</button>
     <button class="tab-btn" data-page="admin">Admin</button>
+    <button class="tab-btn" data-page="guide">Guide</button>
   </div>
 
   <!-- ==================== SCHEDULE TAB ==================== -->
@@ -540,7 +548,14 @@
         <button class="btn btn-secondary" id="admin-signout-btn">Sign Out</button>
       </div>
 
-      <h3 class="mb-8">This Week Overview</h3>
+      <div class="week-nav" id="admin-week-nav">
+        <button id="admin-prev-week">&larr; Prev</button>
+        <div style="text-align:center">
+          <div class="week-label" id="admin-week-label"></div>
+          <button class="today-btn" id="admin-today-btn">Today</button>
+        </div>
+        <button id="admin-next-week">Next &rarr;</button>
+      </div>
       <div class="admin-cards" id="admin-overview"></div>
 
       <div style="display:flex;justify-content:space-between;align-items:center" class="mt-16 mb-8">
@@ -563,6 +578,92 @@
     </div>
   </div>
 
+  <!-- ==================== USER GUIDE TAB ==================== -->
+  <div id="guide-page" class="page">
+    <div style="max-width:640px;margin:0 auto">
+      <h2 class="mb-16">User Guide</h2>
+
+      <div class="day-section open" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>Viewing the Schedule</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p>The <strong>Schedule</strong> tab shows this week's volunteer shifts.</p>
+          <p>Use <strong>&larr; Prev</strong> and <strong>Next &rarr;</strong> to browse other weeks, or tap <strong>Today</strong> to jump back.</p>
+          <p>On phones, days appear as an accordion (tap to expand). On larger screens, you'll see a weekly grid.</p>
+          <p class="mt-8"><strong>Chip colors:</strong></p>
+          <div class="chips mt-8 mb-8">
+            <span class="chip chip-attending">Green = Here</span>
+            <span class="chip chip-away">Red = Away</span>
+            <span class="chip chip-late">Yellow = Late</span>
+            <span class="chip chip-away chip-needs-sub" style="cursor:default">Dashed = Needs sub</span>
+            <span class="chip chip-sub" style="cursor:default">Blue = Substitute</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="day-section" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>Marking Attendance</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p>Tap any volunteer's name chip to open the attendance editor.</p>
+          <p>Choose a status:</p>
+          <ul style="margin:8px 0 8px 20px">
+            <li><strong>Here</strong> &mdash; default, attending as normal</li>
+            <li><strong>Away</strong> &mdash; not coming (a dashed "needs sub" indicator appears)</li>
+            <li><strong>Late</strong> &mdash; arriving late</li>
+            <li><strong>Partial</strong> &mdash; only part of the shift (add times in notes)</li>
+          </ul>
+          <p>Add optional notes (e.g. "leaving by 12:45") and tap <strong>Save</strong>.</p>
+          <p>No login is needed to mark attendance.</p>
+        </div>
+      </div>
+
+      <div class="day-section" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>Substituting for Someone</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p>When a volunteer is marked <strong>Away</strong>, a <span class="chip chip-add-sub" style="cursor:default;font-size:12px">+ Sub</span> button appears next to their name.</p>
+          <p>Tap <strong>+ Sub</strong>, pick the volunteer who is filling in, and save. The substitute appears as a blue chip next to the away volunteer.</p>
+          <p>To remove a sub, an admin can delete the attendance record.</p>
+        </div>
+      </div>
+
+      <div class="day-section" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>My Shifts</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p>The <strong>My Shifts</strong> tab lets you manage your shift preferences.</p>
+          <p>Select your name from the dropdown, then check or uncheck the shifts you'd like to be scheduled for (Mon-Fri, Morning/Afternoon/Evening).</p>
+          <p>Below the preferences grid you'll see your assigned shifts for the current week with their attendance status.</p>
+        </div>
+      </div>
+
+      <div class="day-section" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>Admin Features</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p>The <strong>Admin</strong> tab requires a magic link login (enter your email, check inbox, click the link).</p>
+          <p>Once signed in you can:</p>
+          <ul style="margin:8px 0 8px 20px">
+            <li>View weekly attendance stats (expected, attending, away, subs, unfilled)</li>
+            <li>Browse different weeks with the week navigation</li>
+            <li>Add new volunteers or edit existing ones (name, email, phone, active/inactive)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== ATTENDANCE POPOVER ==================== -->
   <div class="popover-overlay" id="attendance-popover">
     <div class="popover">
@@ -578,16 +679,31 @@
 
       <textarea id="popover-notes" placeholder="Notes (optional)..."></textarea>
 
-      <div class="sub-picker" id="sub-picker-section" style="display:none">
-        <label class="text-sm mb-8" style="display:block;font-weight:600">Substitute:</label>
-        <select id="sub-picker-select">
-          <option value="">No substitute</option>
-        </select>
-      </div>
-
       <div class="popover-actions mt-8">
         <button class="btn btn-secondary" id="popover-cancel">Cancel</button>
         <button class="btn btn-primary" id="popover-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SUB POPOVER ==================== -->
+  <div class="popover-overlay" id="sub-popover">
+    <div class="popover">
+      <h3>Substitute for <span id="sub-popover-for"></span></h3>
+      <div class="shift-info" id="sub-popover-shift-info"></div>
+
+      <div class="form-group">
+        <label>Who is subbing?</label>
+        <select id="sub-volunteer-select" class="my-shifts-select" style="max-width:100%">
+          <option value="">Select a volunteer...</option>
+        </select>
+      </div>
+
+      <textarea id="sub-popover-notes" placeholder="Notes (optional)..."></textarea>
+
+      <div class="popover-actions mt-8">
+        <button class="btn btn-secondary" id="sub-popover-cancel">Cancel</button>
+        <button class="btn btn-primary" id="sub-popover-save">Save</button>
       </div>
     </div>
   </div>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zen Caregiving - Volunteer Shifts</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card: #f8f9fa;
+      --accent: #5b7f5e;
+      --accent-light: #e8f0e9;
+      --text: #333333;
+      --text-light: #666666;
+      --border: #e0e0e0;
+      --border-light: #f0f0f0;
+      --danger: #dc3545;
+      --danger-light: #ffe0e6;
+      --warn: #e6a817;
+      --warn-light: #fff9e6;
+      --ok: #28a745;
+      --ok-light: #e6ffe6;
+      --info: #1781b8;
+      --info-light: #e0f7ff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a1a;
+        --card: #2d2d2d;
+        --accent: #7aad7e;
+        --accent-light: #2d3f2e;
+        --text: #f0f0f0;
+        --text-light: #aaaaaa;
+        --border: #444444;
+        --border-light: #333333;
+        --danger: #ff6b7a;
+        --danger-light: #3d1f23;
+        --warn: #ffc940;
+        --warn-light: #3d3520;
+        --ok: #4cdf6b;
+        --ok-light: #1f3d23;
+        --info: #4db8e8;
+        --info-light: #1f2d3d;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: var(--accent);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header-right { display: flex; gap: 8px; align-items: center; }
+    .header-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .header-btn:hover { background: rgba(255,255,255,0.3); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border);
+      background: var(--card);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-light);
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Pages */
+    .page { display: none; padding: 16px; }
+    .page.active { display: block; }
+
+    /* Week navigation */
+    .week-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      margin-bottom: 12px;
+    }
+    .week-nav button {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .week-nav button:hover { background: var(--accent-light); }
+    .week-label { font-weight: 600; font-size: 16px; }
+    .today-btn {
+      background: var(--accent) !important;
+      color: white !important;
+      border-color: var(--accent) !important;
+      font-size: 12px !important;
+      padding: 4px 10px !important;
+    }
+
+    /* Day accordion (mobile) */
+    .day-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      cursor: pointer;
+      font-weight: 600;
+      user-select: none;
+    }
+    .day-header:hover { background: var(--accent-light); }
+    .day-header .date-label { font-weight: 400; color: var(--text-light); font-size: 14px; }
+    .day-header .arrow { transition: transform 0.2s; }
+    .day-section.open .day-header .arrow { transform: rotate(90deg); }
+    .day-body { display: none; padding: 0 16px 12px; }
+    .day-section.open .day-body { display: block; }
+    .day-section.today { border-color: var(--accent); border-width: 2px; }
+    .day-section.today .day-header { color: var(--accent); }
+
+    /* Shift section within a day */
+    .shift-section { margin-bottom: 8px; }
+    .shift-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-light);
+      margin-bottom: 6px;
+      padding-left: 2px;
+    }
+
+    /* Volunteer chips */
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      transition: all 0.15s;
+    }
+    .chip:hover { opacity: 0.85; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+    .chip-attending { background: var(--ok-light); color: var(--ok); border-color: var(--ok); }
+    .chip-away { background: var(--danger-light); color: var(--danger); border-color: var(--danger); }
+    .chip-late { background: var(--warn-light); color: var(--warn); border-color: var(--warn); }
+    .chip-partial { background: var(--warn-light); color: var(--warn); border-color: var(--warn); }
+    .chip-sub { background: var(--info-light); color: var(--info); border-color: var(--info); }
+    .chip-needs-sub { border-style: dashed; }
+    .chip .sub-label { font-size: 11px; margin-left: 4px; opacity: 0.8; }
+
+    /* Popover for attendance entry */
+    .popover-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 1000;
+      display: none;
+    }
+    .popover-overlay.active { display: flex; align-items: flex-end; }
+    @media (min-width: 640px) {
+      .popover-overlay.active { align-items: center; justify-content: center; }
+    }
+    .popover {
+      background: var(--bg);
+      border-radius: 16px 16px 0 0;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    @media (min-width: 640px) {
+      .popover { border-radius: 12px; }
+    }
+    .popover h3 { margin-bottom: 4px; }
+    .popover .shift-info { color: var(--text-light); font-size: 14px; margin-bottom: 16px; }
+
+    .status-options { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .status-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .status-btn.selected { border-color: var(--accent); background: var(--accent-light); }
+    .status-btn[data-status="attending"].selected { border-color: var(--ok); background: var(--ok-light); }
+    .status-btn[data-status="away"].selected { border-color: var(--danger); background: var(--danger-light); }
+    .status-btn[data-status="late"].selected { border-color: var(--warn); background: var(--warn-light); }
+    .status-btn[data-status="partial"].selected { border-color: var(--warn); background: var(--warn-light); }
+
+    .popover textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 60px;
+      margin-bottom: 12px;
+      background: var(--card);
+      color: var(--text);
+    }
+    .popover-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+
+    /* Weekly grid table (tablet+) */
+    .week-grid { display: none; }
+    @media (min-width: 640px) {
+      .week-grid { display: table; width: 100%; border-collapse: collapse; }
+      .day-accordion { display: none; }
+    }
+    .week-grid th, .week-grid td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    .week-grid th {
+      background: var(--card);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-light);
+    }
+    .week-grid .day-cell {
+      font-weight: 600;
+      white-space: nowrap;
+      width: 100px;
+    }
+    .week-grid .today-row { background: var(--accent-light); }
+    .week-grid td .shift-label { margin-top: 0; }
+
+    /* My Shifts tab */
+    .my-shifts-select {
+      width: 100%;
+      max-width: 300px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 16px;
+      margin-bottom: 16px;
+      background: var(--card);
+      color: var(--text);
+    }
+    .pref-grid {
+      display: grid;
+      grid-template-columns: auto repeat(3, 1fr);
+      gap: 2px;
+      margin-bottom: 24px;
+    }
+    .pref-grid .pref-header {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 8px 4px;
+      color: var(--text-light);
+    }
+    .pref-grid .pref-day {
+      font-weight: 600;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+    }
+    .pref-grid .pref-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+    .pref-grid input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    /* Admin tab */
+    .admin-login {
+      max-width: 400px;
+      margin: 40px auto;
+      text-align: center;
+    }
+    .admin-login input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 16px;
+      margin-bottom: 12px;
+      background: var(--card);
+      color: var(--text);
+    }
+    .admin-content { display: none; }
+
+    /* Admin cards */
+    .admin-cards {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (min-width: 640px) {
+      .admin-cards { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1024px) {
+      .admin-cards { grid-template-columns: repeat(5, 1fr); }
+    }
+    .admin-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .admin-card h4 { font-size: 13px; color: var(--text-light); text-transform: uppercase; }
+    .admin-card .value { font-size: 28px; font-weight: 700; margin: 4px 0; }
+    .admin-card.highlight { border-color: var(--danger); }
+    .admin-card.highlight .value { color: var(--danger); }
+
+    /* Volunteer management table */
+    .vol-table { width: 100%; border-collapse: collapse; }
+    .vol-table th, .vol-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 14px;
+    }
+    .vol-table th { font-weight: 600; color: var(--text-light); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-active { background: var(--ok-light); color: var(--ok); }
+    .badge-inactive { background: var(--border-light); color: var(--text-light); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      z-index: 1000;
+      overflow-y: auto;
+    }
+    .modal-overlay.active { display: flex; align-items: flex-end; }
+    @media (min-width: 640px) {
+      .modal-overlay.active { align-items: center; justify-content: center; }
+    }
+    .modal {
+      background: var(--bg);
+      border-radius: 16px 16px 0 0;
+      padding: 24px;
+      width: 100%;
+      max-width: 500px;
+    }
+    @media (min-width: 640px) {
+      .modal { border-radius: 12px; }
+    }
+    .modal h3 { margin-bottom: 16px; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-light); margin-bottom: 4px; }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 16px;
+      background: var(--card);
+      color: var(--text);
+    }
+    .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+    /* Sub picker */
+    .sub-picker { margin-top: 12px; }
+    .sub-picker select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--card);
+      color: var(--text);
+    }
+
+    /* Utility */
+    .text-muted { color: var(--text-light); }
+    .text-sm { font-size: 13px; }
+    .mt-8 { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-8 { margin-bottom: 8px; }
+    .mb-16 { margin-bottom: 16px; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: var(--text-light); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 24px; color: var(--text-light); font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Zen Caregiving</h1>
+    <div class="header-right">
+      <span id="auth-status" class="text-sm"></span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-page="schedule">Schedule</button>
+    <button class="tab-btn" data-page="my-shifts">My Shifts</button>
+    <button class="tab-btn" data-page="admin">Admin</button>
+  </div>
+
+  <!-- ==================== SCHEDULE TAB ==================== -->
+  <div id="schedule-page" class="page active">
+    <div class="week-nav">
+      <button id="prev-week">&larr; Prev</button>
+      <div style="text-align:center">
+        <div class="week-label" id="week-label"></div>
+        <button class="today-btn" id="today-btn">Today</button>
+      </div>
+      <button id="next-week">Next &rarr;</button>
+    </div>
+
+    <div id="day-accordion" class="day-accordion"></div>
+
+    <table class="week-grid" id="week-grid">
+      <thead>
+        <tr>
+          <th>Day</th>
+          <th>Morning</th>
+          <th>Afternoon</th>
+          <th>Evening</th>
+        </tr>
+      </thead>
+      <tbody id="week-grid-body"></tbody>
+    </table>
+  </div>
+
+  <!-- ==================== MY SHIFTS TAB ==================== -->
+  <div id="my-shifts-page" class="page">
+    <h2 class="mb-16">My Shifts</h2>
+    <p class="text-muted mb-8">Select your name to manage your shift preferences.</p>
+    <select id="my-volunteer-select" class="my-shifts-select">
+      <option value="">Select your name...</option>
+    </select>
+
+    <div id="my-shifts-content" style="display:none">
+      <h3 class="mb-8">Preferred Shifts</h3>
+      <p class="text-muted text-sm mb-8">Check the shifts you'd like to be scheduled for.</p>
+      <div class="pref-grid" id="pref-grid">
+        <div></div>
+        <div class="pref-header">Morning</div>
+        <div class="pref-header">Afternoon</div>
+        <div class="pref-header">Evening</div>
+      </div>
+
+      <h3 class="mt-16 mb-8">This Week</h3>
+      <div id="my-week-summary"></div>
+    </div>
+  </div>
+
+  <!-- ==================== ADMIN TAB ==================== -->
+  <div id="admin-page" class="page">
+    <div id="admin-login-section" class="admin-login">
+      <h2 class="mb-16">Admin Login</h2>
+      <p class="text-muted mb-16">Sign in with your email to access admin features.</p>
+      <input type="email" id="admin-email" placeholder="Email address">
+      <button class="btn btn-primary" id="admin-signin-btn" style="width:100%">Send Magic Link</button>
+      <p id="admin-login-status" class="text-muted mt-8 text-sm"></p>
+    </div>
+
+    <div id="admin-content" class="admin-content">
+      <div style="display:flex;justify-content:space-between;align-items:center" class="mb-16">
+        <h2>Admin Dashboard</h2>
+        <button class="btn btn-secondary" id="admin-signout-btn">Sign Out</button>
+      </div>
+
+      <h3 class="mb-8">This Week Overview</h3>
+      <div class="admin-cards" id="admin-overview"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center" class="mt-16 mb-8">
+        <h3>Volunteers</h3>
+        <button class="btn btn-primary" id="add-volunteer-btn">+ Add</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="vol-table" id="vol-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Shifts</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="vol-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ATTENDANCE POPOVER ==================== -->
+  <div class="popover-overlay" id="attendance-popover">
+    <div class="popover">
+      <h3 id="popover-name"></h3>
+      <div class="shift-info" id="popover-shift-info"></div>
+
+      <div class="status-options" id="popover-status-options">
+        <button class="status-btn" data-status="attending">Here</button>
+        <button class="status-btn" data-status="away">Away</button>
+        <button class="status-btn" data-status="late">Late</button>
+        <button class="status-btn" data-status="partial">Partial</button>
+      </div>
+
+      <textarea id="popover-notes" placeholder="Notes (optional)..."></textarea>
+
+      <div class="sub-picker" id="sub-picker-section" style="display:none">
+        <label class="text-sm mb-8" style="display:block;font-weight:600">Substitute:</label>
+        <select id="sub-picker-select">
+          <option value="">No substitute</option>
+        </select>
+      </div>
+
+      <div class="popover-actions mt-8">
+        <button class="btn btn-secondary" id="popover-cancel">Cancel</button>
+        <button class="btn btn-primary" id="popover-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== ADD/EDIT VOLUNTEER MODAL ==================== -->
+  <div class="modal-overlay" id="volunteer-modal">
+    <div class="modal">
+      <h3 id="volunteer-modal-title">Add Volunteer</h3>
+      <form id="volunteer-form">
+        <input type="hidden" name="id" id="vol-form-id">
+        <div class="form-group">
+          <label>First Name</label>
+          <input type="text" name="first_name" id="vol-form-name" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" id="vol-form-email">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" name="phone" id="vol-form-phone">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="is_active" id="vol-form-active">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('volunteer-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

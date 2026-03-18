@@ -733,7 +733,36 @@
         <div class="day-body" style="font-size:14px;line-height:1.7">
           <p>The <strong>My Shifts</strong> tab lets you manage your shift preferences.</p>
           <p>Select your name from the dropdown, then check or uncheck the shifts you'd like to be scheduled for (Mon-Fri, Morning/Afternoon/Evening).</p>
-          <p>Below the preferences grid you'll see your assigned shifts for the current week with their attendance status.</p>
+          <p>Below the preferences grid you'll see your assigned shifts for the current week with their attendance status and who else is on each shift.</p>
+          <p>You can also add your email address for shift notifications. A verification link will be sent to confirm your address.</p>
+        </div>
+      </div>
+
+      <div class="day-section" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>Copy &amp; Calendar</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p><strong>Copy Schedule:</strong> Tap the <strong>Copy</strong> button next to "Today" on the Schedule tab. The week's schedule is copied as plain text you can paste into a message or email.</p>
+          <p><strong>Calendar Feed:</strong> Subscribe to the shift calendar from your phone's calendar app:</p>
+          <ol style="margin:8px 0 8px 20px">
+            <li>Copy this URL: <code style="font-size:12px;background:var(--card);padding:2px 6px;border-radius:4px">https://mngcuykpdpvunenujdsa.supabase.co/functions/v1/calendar-feed</code></li>
+            <li>In Apple Calendar: File &rarr; New Calendar Subscription &rarr; paste the URL</li>
+            <li>In Google Calendar: Other calendars + &rarr; From URL &rarr; paste</li>
+          </ol>
+          <p>The calendar auto-updates with shift changes. For your shifts only, add <code style="font-size:12px">?volunteer_id=YOUR_ID</code> to the URL.</p>
+        </div>
+      </div>
+
+      <div class="day-section" style="margin-bottom:12px">
+        <div class="day-header" onclick="toggleDay(this)">
+          <div>Offline Mode</div>
+          <span class="arrow">&#9654;</span>
+        </div>
+        <div class="day-body" style="font-size:14px;line-height:1.7">
+          <p>The app works offline! If you lose your internet connection, a yellow bar appears at the top.</p>
+          <p>You can still mark attendance while offline — your changes are saved locally and automatically synced when you reconnect.</p>
         </div>
       </div>
 
@@ -747,8 +776,10 @@
           <p>Once signed in you can:</p>
           <ul style="margin:8px 0 8px 20px">
             <li>View weekly attendance stats (expected, attending, away, subs, unfilled)</li>
+            <li>View 4-week attendance trends</li>
             <li>Browse different weeks with the week navigation</li>
             <li>Add new volunteers or edit existing ones (name, email, phone, active/inactive)</li>
+            <li>Manage shift assignments (click "Shifts" next to a volunteer's name)</li>
           </ul>
         </div>
       </div>

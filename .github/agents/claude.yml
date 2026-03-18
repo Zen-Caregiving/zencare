@@ -1,0 +1,17 @@
+# Claude Code agent configuration for GitHub
+# Responds to @claude mentions in issues and PRs
+
+model: claude-sonnet-4-20250514
+
+# Pull in project-level instructions
+instructions:
+  - CLAUDE.md
+
+# Tools the agent is allowed to use
+allowed_tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep

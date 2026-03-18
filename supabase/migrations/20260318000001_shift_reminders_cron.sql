@@ -1,3 +1,7 @@
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+
 -- Schedule shift reminder emails via pg_cron + pg_net
 -- Times are UTC — adjust for your timezone (these assume US Pacific: UTC-7)
 -- Morning reminder at 7:30 AM PT = 14:30 UTC

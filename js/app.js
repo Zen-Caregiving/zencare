@@ -501,11 +501,21 @@ async function saveVolunteerEmail(volunteerId) {
   saveBtn.textContent = 'Save';
 
   if (result) {
-    statusEl.textContent = 'Saved!';
+    if (result.verification_sent) {
+      statusEl.textContent = 'Check your email for a verification link!';
+      showToast('Verification email sent', 'info');
+    } else if (result.already_verified) {
+      statusEl.textContent = 'Email already verified.';
+    } else {
+      statusEl.textContent = 'Saved!';
+    }
     const vol = volunteersCache.find(v => v.id === volunteerId);
     if (vol) {
-      vol.email = email || null;
       vol.email_notifications = emailNotifications;
+      // Don't update local email cache — it's pending verification
+      if (!result.verification_sent) {
+        vol.email = email || null;
+      }
     }
   }
 }

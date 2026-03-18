@@ -784,7 +784,7 @@ async function signInAdmin() {
 
   const { error } = await sb.auth.signInWithOtp({
     email: email,
-    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+    options: { emailRedirectTo: 'https://jhwright.github.io/zencare/' }
   });
 
   if (error) {

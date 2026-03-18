@@ -49,7 +49,12 @@ deno test tests/    # Run all Edge Function tests
    supabase secrets set APP_URL="https://jhwright.github.io/zencare/"
    ```
 
-2. Configure database settings (run in Supabase SQL editor):
+2. Configure SMTP for auth emails (Supabase Dashboard > Auth > SMTP Settings):
+   - Host: `smtp.resend.com`, Port: `465`, User: `resend`, Pass: your Resend API key
+   - Sender email: `notifications@zencaregiving.org`, Sender name: `Zen Caregiving`
+   - Also set Site URL to `https://jhwright.github.io/zencare/` under Auth > URL Configuration
+
+3. Configure database settings (run in Supabase SQL editor):
    ```sql
    ALTER DATABASE postgres SET app.settings.supabase_url = 'https://mngcuykpdpvunenujdsa.supabase.co';
    ALTER DATABASE postgres SET app.settings.service_role_key = 'YOUR_SERVICE_ROLE_KEY';

@@ -534,6 +534,36 @@
       font-size: 13px;
       font-weight: 500;
     }
+
+    /* PWA install banner */
+    .install-banner {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--accent);
+      color: white;
+      padding: 12px 16px;
+      z-index: 1050;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.15);
+    }
+    .install-banner.visible { display: flex; }
+    .install-banner-text { font-size: 14px; font-weight: 500; }
+    .install-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .install-banner-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .install-banner-btn-primary { background: white; color: var(--accent); }
+    .install-banner-btn-dismiss { background: rgba(255,255,255,0.2); color: white; }
   </style>
 </head>
 <body>
@@ -878,6 +908,15 @@
   <!-- Toast container -->
   <div class="toast-container" id="toast-container"></div>
 
+  <!-- PWA install banner -->
+  <div class="install-banner" id="install-banner">
+    <span class="install-banner-text">Install Zen Care for quick access</span>
+    <div class="install-banner-actions">
+      <button class="install-banner-btn install-banner-btn-dismiss" id="install-dismiss">Not now</button>
+      <button class="install-banner-btn install-banner-btn-primary" id="install-btn">Install</button>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
@@ -885,6 +924,44 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js');
     }
+
+    // PWA install prompt
+    (function() {
+      let deferredPrompt;
+      const banner = document.getElementById('install-banner');
+      const installBtn = document.getElementById('install-btn');
+      const dismissBtn = document.getElementById('install-dismiss');
+
+      // Don't show if already installed (standalone) or previously dismissed
+      if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return;
+      if (localStorage.getItem('pwa-install-dismissed')) return;
+
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        banner.classList.add('visible');
+      });
+
+      installBtn.addEventListener('click', function() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function() {
+          deferredPrompt = null;
+          banner.classList.remove('visible');
+        });
+      });
+
+      dismissBtn.addEventListener('click', function() {
+        banner.classList.remove('visible');
+        localStorage.setItem('pwa-install-dismissed', '1');
+        deferredPrompt = null;
+      });
+
+      window.addEventListener('appinstalled', function() {
+        banner.classList.remove('visible');
+        deferredPrompt = null;
+      });
+    })();
   </script>
 </body>
 </html>

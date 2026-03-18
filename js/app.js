@@ -122,14 +122,14 @@ async function init() {
 }
 
 async function loadBaseData() {
-  const [volRes, shiftRes, assignRes] = await Promise.all([
-    sb.from('volunteers').select('*').order('first_name'),
-    sb.from('shifts').select('*').order('day_of_week').order('time_slot'),
-    sb.from('shift_assignments').select('*').eq('is_active', true),
+  const [vols, shifts, assigns] = await Promise.all([
+    sbQuery(sb.from('volunteers').select('*').order('first_name')),
+    sbQuery(sb.from('shifts').select('*').order('day_of_week').order('time_slot')),
+    sbQuery(sb.from('shift_assignments').select('*').eq('is_active', true)),
   ]);
-  volunteersCache = volRes.data || [];
-  shiftsCache = shiftRes.data || [];
-  assignmentsCache = assignRes.data || [];
+  volunteersCache = vols || [];
+  shiftsCache = shifts || [];
+  assignmentsCache = assigns || [];
 }
 
 async function loadWeek(monday) {
@@ -137,14 +137,14 @@ async function loadWeek(monday) {
   const mondayStr = fmtDateISO(monday);
   const fridayStr = fmtDateISO(friday);
 
-  const [attRes, prefRes] = await Promise.all([
-    sb.from('attendance').select('*')
+  const [att, pref] = await Promise.all([
+    sbQuery(sb.from('attendance').select('*')
       .gte('shift_date', mondayStr)
-      .lte('shift_date', fridayStr),
-    sb.from('preferred_shifts').select('*'),
+      .lte('shift_date', fridayStr)),
+    sbQuery(sb.from('preferred_shifts').select('*')),
   ]);
-  attendanceCache = attRes.data || [];
-  preferredShiftsCache = prefRes.data || [];
+  attendanceCache = att || [];
+  preferredShiftsCache = pref || [];
 }
 
 // ============================================================
@@ -368,19 +368,27 @@ async function saveSub() {
   const subVolunteerId = document.getElementById('sub-volunteer-select').value;
   if (!subVolunteerId) { return; }
 
+  const saveBtn = document.getElementById('sub-popover-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
   const notes = document.getElementById('sub-popover-notes').value.trim() || null;
   const { awayVolunteerId, shiftId, shiftDate } = subPopoverContext;
 
-  // Create attendance record for the sub
-  await sb.from('attendance').upsert({
+  const result = await sbQuery(sb.from('attendance').upsert({
     shift_id: shiftId,
     volunteer_id: subVolunteerId,
     shift_date: shiftDate,
     status: 'attending',
     sub_for_id: awayVolunteerId,
     notes: notes,
-  }, { onConflict: 'shift_id,volunteer_id,shift_date' });
+  }, { onConflict: 'shift_id,volunteer_id,shift_date' }));
 
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save';
+  if (result === null) return;
+
+  showToast('Substitute assigned', 'success');
   closeSubPopover();
   await loadWeek(currentMonday);
   renderSchedule();
@@ -400,31 +408,46 @@ async function saveAttendance() {
 
   const { volunteerId, shiftId, shiftDate } = popoverContext;
 
+  // Disable save button during async
+  const saveBtn = document.getElementById('popover-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  let result;
   // If status is "attending" with no notes, delete the record (default state)
   if (status === 'attending' && !notes) {
     const existing = attendanceCache.find(a =>
       a.shift_id === shiftId && a.volunteer_id === volunteerId && a.shift_date === shiftDate
     );
     if (existing) {
-      await sb.from('attendance').delete().eq('id', existing.id);
+      result = await sbQuery(sb.from('attendance').delete().eq('id', existing.id));
+      if (result === null) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
     }
   } else {
-    // Upsert attendance
-    await sb.from('attendance').upsert({
+    result = await sbQuery(sb.from('attendance').upsert({
       shift_id: shiftId,
       volunteer_id: volunteerId,
       shift_date: shiftDate,
       status: status,
       notes: notes,
-    }, { onConflict: 'shift_id,volunteer_id,shift_date' });
+    }, { onConflict: 'shift_id,volunteer_id,shift_date' }));
+    if (result === null) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
   }
 
-  // Fire away alert if volunteer marked away
+  // Fire away alert only when status CHANGES to away (dedup)
   if (status === 'away') {
-    triggerAwayAlert(shiftId, shiftDate, volunteerId);
+    const wasAlreadyAway = attendanceCache.find(a =>
+      a.shift_id === shiftId && a.volunteer_id === volunteerId && a.shift_date === shiftDate
+    )?.status === 'away';
+    if (!wasAlreadyAway) {
+      triggerAwayAlert(shiftId, shiftDate, volunteerId);
+    }
   }
 
+  showToast('Attendance saved', 'success');
   closeAttendancePopover();
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save';
   await loadWeek(currentMonday);
   renderSchedule();
 }
@@ -454,58 +477,53 @@ async function loadVolunteerEmail(volunteerId) {
 async function saveVolunteerEmail(volunteerId) {
   const email = document.getElementById('volunteer-email').value.trim();
   const emailNotifications = document.getElementById('email-notif-toggle').checked;
-  const status = document.getElementById('email-status');
+  const statusEl = document.getElementById('email-status');
+  const saveBtn = document.getElementById('save-email-btn');
 
-  status.textContent = 'Saving...';
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  statusEl.textContent = '';
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/update-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        volunteer_id: volunteerId,
-        email: email,
-        email_notifications: emailNotifications,
-      }),
-    });
+  const result = await sbFetch(`${SUPABASE_URL}/functions/v1/update-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      volunteer_id: volunteerId,
+      email: email,
+      email_notifications: emailNotifications,
+    }),
+  });
 
-    const result = await res.json();
-    if (result.ok) {
-      status.textContent = 'Saved!';
-      // Update local cache
-      const vol = volunteersCache.find(v => v.id === volunteerId);
-      if (vol) {
-        vol.email = email || null;
-        vol.email_notifications = emailNotifications;
-      }
-    } else {
-      status.textContent = 'Error: ' + (result.error || 'Unknown error');
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save';
+
+  if (result) {
+    statusEl.textContent = 'Saved!';
+    const vol = volunteersCache.find(v => v.id === volunteerId);
+    if (vol) {
+      vol.email = email || null;
+      vol.email_notifications = emailNotifications;
     }
-  } catch (e) {
-    status.textContent = 'Error: Could not save';
   }
 }
 
 async function triggerAwayAlert(shiftId, shiftDate, volunteerId) {
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/away-alert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        shift_id: shiftId,
-        shift_date: shiftDate,
-        away_volunteer_id: volunteerId,
-      }),
-    });
-  } catch (e) {
-    console.error('Away alert failed:', e);
-  }
+  // Fire-and-forget — don't block the UI, but log failures
+  sbFetch(`${SUPABASE_URL}/functions/v1/away-alert`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      shift_id: shiftId,
+      shift_date: shiftDate,
+      away_volunteer_id: volunteerId,
+    }),
+  });
 }
 
 // ============================================================
@@ -586,22 +604,24 @@ function renderMyWeekSummary(volunteerId) {
 }
 
 async function togglePreference(volunteerId, dayOfWeek, timeSlot, checked) {
+  let result;
   if (checked) {
-    await sb.from('preferred_shifts').upsert({
+    result = await sbQuery(sb.from('preferred_shifts').upsert({
       volunteer_id: volunteerId,
       day_of_week: dayOfWeek,
       time_slot: timeSlot,
-    }, { onConflict: 'volunteer_id,day_of_week,time_slot' });
+    }, { onConflict: 'volunteer_id,day_of_week,time_slot' }));
   } else {
-    await sb.from('preferred_shifts')
+    result = await sbQuery(sb.from('preferred_shifts')
       .delete()
       .eq('volunteer_id', volunteerId)
       .eq('day_of_week', dayOfWeek)
-      .eq('time_slot', timeSlot);
+      .eq('time_slot', timeSlot));
   }
+  if (result === null) return;
   // Reload prefs
-  const { data } = await sb.from('preferred_shifts').select('*');
-  preferredShiftsCache = data || [];
+  const prefs = await sbQuery(sb.from('preferred_shifts').select('*'));
+  preferredShiftsCache = prefs || [];
 }
 
 // ============================================================
@@ -664,10 +684,10 @@ async function loadAdminWeek(monday) {
   const mondayStr = fmtDateISO(monday);
   const fridayStr = fmtDateISO(friday);
 
-  const { data } = await sb.from('attendance').select('*')
+  const att = await sbQuery(sb.from('attendance').select('*')
     .gte('shift_date', mondayStr)
-    .lte('shift_date', fridayStr);
-  adminAttendanceCache = data || [];
+    .lte('shift_date', fridayStr));
+  adminAttendanceCache = att || [];
 
   renderAdminWeekLabel();
   renderAdminOverview();
@@ -780,21 +800,29 @@ async function submitVolunteerForm(e) {
   const fd = new FormData(form);
   const id = fd.get('id');
 
-  const data = {
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving...';
+
+  const volData = {
     first_name: fd.get('first_name'),
     email: fd.get('email') || null,
     phone: fd.get('phone') || null,
     is_active: fd.get('is_active') === 'true',
   };
 
+  let result;
   if (id) {
-    const { error } = await sb.from('volunteers').update(data).eq('id', id);
-    if (error) { alert('Error: ' + error.message); return; }
+    result = await sbQuery(sb.from('volunteers').update(volData).eq('id', id));
   } else {
-    const { error } = await sb.from('volunteers').insert(data);
-    if (error) { alert('Error: ' + error.message); return; }
+    result = await sbQuery(sb.from('volunteers').insert(volData));
   }
 
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Save';
+  if (result === null) return;
+
+  showToast(id ? 'Volunteer updated' : 'Volunteer added', 'success');
   closeModal('volunteer-modal');
   await loadBaseData();
   renderVolunteerTable();
@@ -950,6 +978,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.classList.contains('modal-overlay')) {
       e.target.classList.remove('active');
       document.body.style.overflow = '';
+    }
+  });
+
+  // ESC key to close popovers and modals
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (popoverContext) closeAttendancePopover();
+      if (subPopoverContext) closeSubPopover();
+      document.querySelectorAll('.modal-overlay.active').forEach(m => {
+        m.classList.remove('active');
+        document.body.style.overflow = '';
+      });
     }
   });
 });

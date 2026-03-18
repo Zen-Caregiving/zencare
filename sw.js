@@ -1,5 +1,5 @@
 // Zencare Service Worker — offline caching
-const CACHE_NAME = 'zencare-v1';
+const CACHE_NAME = 'zencare-v2';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -37,17 +37,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Cache successful same-origin GET responses
-        if (response.ok && event.request.method === 'GET' && url.origin === self.location.origin) {
+  // Network-first for HTML/JS (pick up deploys immediately), cache-first for assets
+  const isAppCode = url.pathname.endsWith('.html') || url.pathname.endsWith('.js') || url.pathname === '/' || url.pathname.endsWith('/');
+
+  if (isAppCode) {
+    // Network first, fall back to cache (for offline)
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      });
-    })
-  );
+      }).catch(() => caches.match(event.request))
+    );
+  } else {
+    // Cache first for images, manifest, etc.
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok && event.request.method === 'GET' && url.origin === self.location.origin) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        });
+      })
+    );
+  }
 });

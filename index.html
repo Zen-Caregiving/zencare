@@ -908,12 +908,20 @@
   <!-- Toast container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <!-- PWA install banner -->
+  <!-- PWA install banner (Chrome/Edge) -->
   <div class="install-banner" id="install-banner">
     <span class="install-banner-text">Install Zen Care for quick access</span>
     <div class="install-banner-actions">
       <button class="install-banner-btn install-banner-btn-dismiss" id="install-dismiss">Not now</button>
       <button class="install-banner-btn install-banner-btn-primary" id="install-btn">Install</button>
+    </div>
+  </div>
+
+  <!-- PWA install banner (Safari/iOS) -->
+  <div class="install-banner" id="install-banner-ios">
+    <span class="install-banner-text">Install: tap <strong>Share</strong> &#x2B06; then <strong>"Add to Home Screen"</strong></span>
+    <div class="install-banner-actions">
+      <button class="install-banner-btn install-banner-btn-dismiss" id="install-dismiss-ios">Got it</button>
     </div>
   </div>
 
@@ -927,40 +935,56 @@
 
     // PWA install prompt
     (function() {
-      let deferredPrompt;
-      const banner = document.getElementById('install-banner');
-      const installBtn = document.getElementById('install-btn');
-      const dismissBtn = document.getElementById('install-dismiss');
-
       // Don't show if already installed (standalone) or previously dismissed
       if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return;
       if (localStorage.getItem('pwa-install-dismissed')) return;
 
-      window.addEventListener('beforeinstallprompt', function(e) {
-        e.preventDefault();
-        deferredPrompt = e;
-        banner.classList.add('visible');
-      });
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-      installBtn.addEventListener('click', function() {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(function() {
-          deferredPrompt = null;
-          banner.classList.remove('visible');
+      if (isIOS || isSafari) {
+        // Safari/iOS: show instructions since beforeinstallprompt is not supported
+        var iosBanner = document.getElementById('install-banner-ios');
+        var iosDismiss = document.getElementById('install-dismiss-ios');
+        iosBanner.classList.add('visible');
+        iosDismiss.addEventListener('click', function() {
+          iosBanner.classList.remove('visible');
+          localStorage.setItem('pwa-install-dismissed', '1');
         });
-      });
+      } else {
+        // Chrome/Edge: use beforeinstallprompt
+        var deferredPrompt;
+        var banner = document.getElementById('install-banner');
+        var installBtn = document.getElementById('install-btn');
+        var dismissBtn = document.getElementById('install-dismiss');
 
-      dismissBtn.addEventListener('click', function() {
-        banner.classList.remove('visible');
-        localStorage.setItem('pwa-install-dismissed', '1');
-        deferredPrompt = null;
-      });
+        window.addEventListener('beforeinstallprompt', function(e) {
+          e.preventDefault();
+          deferredPrompt = e;
+          banner.classList.add('visible');
+        });
 
-      window.addEventListener('appinstalled', function() {
-        banner.classList.remove('visible');
-        deferredPrompt = null;
-      });
+        installBtn.addEventListener('click', function() {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function() {
+            deferredPrompt = null;
+            banner.classList.remove('visible');
+          });
+        });
+
+        dismissBtn.addEventListener('click', function() {
+          banner.classList.remove('visible');
+          localStorage.setItem('pwa-install-dismissed', '1');
+          deferredPrompt = null;
+        });
+
+        window.addEventListener('appinstalled', function() {
+          banner.classList.remove('visible');
+          deferredPrompt = null;
+        });
+      }
     })();
   </script>
 </body>

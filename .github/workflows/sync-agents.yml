@@ -1,0 +1,36 @@
+name: Sync agents from jhwright/agents
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6am UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch agents repo
+        run: |
+          rm -rf .github/agents
+          git clone --depth 1 https://github.com/jhwright/agents.git .github/agents
+          rm -rf .github/agents/.git
+
+      - name: Check for changes
+        id: diff
+        run: |
+          git add .github/agents
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Sync agents from jhwright/agents"
+          git push

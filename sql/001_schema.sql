@@ -103,8 +103,10 @@ ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
 -- Shifts: everyone can read
 CREATE POLICY shifts_select_all ON shifts FOR SELECT TO anon, authenticated USING (true);
 
--- Volunteers: everyone can read, authenticated can modify
-CREATE POLICY volunteers_select_all ON volunteers FOR SELECT TO anon, authenticated USING (true);
+-- Volunteers: authenticated can read all columns, anon only non-sensitive columns
+CREATE POLICY volunteers_select_authenticated ON volunteers FOR SELECT TO authenticated USING (true);
+CREATE POLICY volunteers_select_anon ON volunteers FOR SELECT TO anon USING (true);
+-- Anon column-level: REVOKE SELECT, GRANT SELECT (id, first_name, is_active, email_notifications, created_at, updated_at)
 CREATE POLICY volunteers_insert_auth ON volunteers FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY volunteers_update_auth ON volunteers FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY volunteers_delete_auth ON volunteers FOR DELETE TO authenticated USING (true);

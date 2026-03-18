@@ -214,7 +214,7 @@ async function init() {
 
 async function loadBaseData() {
   const [vols, shifts, assigns] = await Promise.all([
-    sbQuery(sb.from('volunteers').select('*').order('first_name')),
+    sbQuery(sb.from('volunteers').select('id,first_name,is_active,email_notifications').order('first_name')),
     sbQuery(sb.from('shifts').select('*').order('day_of_week').order('time_slot')),
     sbQuery(sb.from('shift_assignments').select('*').eq('is_active', true)),
   ]);
@@ -809,6 +809,9 @@ async function signOutAdmin() {
 async function showAdminContent() {
   document.getElementById('admin-login-section').style.display = 'none';
   document.getElementById('admin-content').style.display = 'block';
+  // Reload volunteers with full columns (authenticated can see email/phone)
+  const vols = await sbQuery(sb.from('volunteers').select('*').order('first_name'));
+  if (vols) volunteersCache = vols;
   await loadAdminWeek(adminMonday);
   renderVolunteerTable();
   renderAttendanceTrends();

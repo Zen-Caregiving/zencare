@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendEmails } from "../_shared/email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,29 +112,41 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Deduplicate: check if an away alert was already sent for this shift+date recently
+    const { data: existingAlert } = await supabase
+      .from("away_alerts_sent")
+      .select("id")
+      .eq("shift_id", shift_id)
+      .eq("shift_date", shift_date)
+      .eq("away_volunteer_id", away_volunteer_id)
+      .maybeSingle();
+
+    if (existingAlert) {
+      return new Response(JSON.stringify({ ok: true, sent: 0, reason: "already_alerted" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Record that we sent this alert
+    await supabase.from("away_alerts_sent").insert({
+      shift_id,
+      shift_date,
+      away_volunteer_id,
+    });
+
     const dayName = DAY_NAMES[shift.day_of_week];
     const slotLabel = SLOT_LABELS[shift.time_slot];
     const awayName = awayVol?.first_name || "A volunteer";
     const appUrl = Deno.env.get("APP_URL") || "https://jhwright.github.io/zencare/";
+    const from = Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>";
 
-    let sent = 0;
-    for (const vol of volunteers) {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${resendKey}`,
-        },
-        body: JSON.stringify({
-          from: Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>",
-          to: [vol.email],
-          subject: `[Zen Care] Sub needed: ${dayName} ${slotLabel}`,
-          text: `Hi ${vol.first_name},\n\n${awayName} is away for the ${dayName} ${slotLabel} shift on ${shift_date}.\n\nCan you sub? Open the app to sign up:\n${appUrl}\n\nThanks!\nZen Caregiving`,
-        }),
-      });
+    const emails = volunteers.map((vol) => ({
+      to: vol.email!,
+      subject: `[Zen Care] Sub needed: ${dayName} ${slotLabel}`,
+      text: `Hi ${vol.first_name},\n\n${awayName} is away for the ${dayName} ${slotLabel} shift on ${shift_date}.\n\nCan you sub? Open the app to sign up:\n${appUrl}\n\nThanks!\nZen Caregiving`,
+    }));
 
-      if (res.ok) sent++;
-    }
+    const sent = await sendEmails(emails, resendKey, from);
 
     return new Response(JSON.stringify({ ok: true, sent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

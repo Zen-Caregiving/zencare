@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendEmail } from "../_shared/email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,21 +112,16 @@ Deno.serve(async (req) => {
       const appUrl = Deno.env.get("APP_URL") || "https://jhwright.github.io/zencare/";
       const verifyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/verify-email?token=${token}&volunteer_id=${volunteer_id}`;
 
-      const emailRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${resendKey}`,
-        },
-        body: JSON.stringify({
-          from: Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>",
-          to: [email],
-          subject: "[Zen Care] Verify your email",
-          text: `Click the link below to verify your email for Zen Caregiving shift notifications:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't request this, you can ignore this email.`,
-        }),
+      const from = Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>";
+      const sent = await sendEmail({
+        resendKey,
+        from,
+        to: email,
+        subject: "[Zen Care] Verify your email",
+        text: `Click the link below to verify your email for Zen Caregiving shift notifications:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't request this, you can ignore this email.`,
       });
 
-      if (!emailRes.ok) {
+      if (!sent) {
         return jsonResponse({ error: "Failed to send verification email" }, 500);
       }
 

@@ -50,6 +50,10 @@ export function createMockSupabase(tables: Record<string, MockRow[]>) {
         isSingle = true;
         return chain;
       },
+      maybeSingle: () => {
+        isSingle = true;
+        return chain;
+      },
       then: (resolve: (val: MockQueryResult) => void) => {
         let result = rows;
         for (const f of filters) result = f(result);

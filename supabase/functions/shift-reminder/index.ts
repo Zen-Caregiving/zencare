@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendEmails } from "../_shared/email.ts";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const SLOT_LABELS: Record<string, string> = {
@@ -57,7 +58,8 @@ Deno.serve(async (req) => {
     }
 
     const appUrl = Deno.env.get("APP_URL") || "https://jhwright.github.io/zencare/";
-    let totalSent = 0;
+    const from = Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>";
+    const allEmails: { to: string; subject: string; text: string }[] = [];
 
     for (const shift of shifts) {
       // Get assigned volunteers
@@ -99,23 +101,15 @@ Deno.serve(async (req) => {
       const slotLabel = SLOT_LABELS[shift.time_slot];
 
       for (const vol of volunteers) {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${resendKey}`,
-          },
-          body: JSON.stringify({
-            from: Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>",
-            to: [vol.email],
-            subject: `[Zen Care] Shift reminder: ${slotLabel} today`,
-            text: `Hi ${vol.first_name},\n\nThis is a reminder that you're scheduled for the ${dayName} ${slotLabel} shift today.\n\nSee the full schedule:\n${appUrl}\n\nThanks!\nZen Caregiving`,
-          }),
+        allEmails.push({
+          to: vol.email!,
+          subject: `[Zen Care] Shift reminder: ${slotLabel} today`,
+          text: `Hi ${vol.first_name},\n\nThis is a reminder that you're scheduled for the ${dayName} ${slotLabel} shift today.\n\nSee the full schedule:\n${appUrl}\n\nThanks!\nZen Caregiving`,
         });
-
-        if (res.ok) totalSent++;
       }
     }
+
+    const totalSent = await sendEmails(allEmails, resendKey, from);
 
     return new Response(JSON.stringify({ ok: true, sent: totalSent }));
   } catch (e) {

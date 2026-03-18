@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendEmails } from "../_shared/email.ts";
 
 // Weekly digest: sends one email per volunteer with the full week's schedule.
 // Triggered by pg_cron on Sunday evening.
@@ -60,7 +61,8 @@ Deno.serve(async (req) => {
     }
 
     const appUrl = Deno.env.get("APP_URL") || "https://jhwright.github.io/zencare/";
-    let totalSent = 0;
+    const from = Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>";
+    const allEmails: { to: string; subject: string; text: string }[] = [];
 
     for (const vol of volunteers) {
       // Build this volunteer's schedule for the week
@@ -107,22 +109,14 @@ Deno.serve(async (req) => {
 
       const weekLabel = `${formatDateShort(nextMonday)} – ${formatDateShort(addDays(nextMonday, 4))}`;
 
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${resendKey}`,
-        },
-        body: JSON.stringify({
-          from: Deno.env.get("FROM_EMAIL") || "Zen Care <notifications@zencaregiving.org>",
-          to: [vol.email],
-          subject: `[Zen Care] Your schedule: ${weekLabel}`,
-          text: `Hi ${vol.first_name},\n\nHere's your schedule for the week of ${weekLabel}:\n\n${scheduleText}View the full schedule: ${appUrl}\n\nThanks!\nZen Caregiving`,
-        }),
+      allEmails.push({
+        to: vol.email!,
+        subject: `[Zen Care] Your schedule: ${weekLabel}`,
+        text: `Hi ${vol.first_name},\n\nHere's your schedule for the week of ${weekLabel}:\n\n${scheduleText}View the full schedule: ${appUrl}\n\nThanks!\nZen Caregiving`,
       });
-
-      if (res.ok) totalSent++;
     }
+
+    const totalSent = await sendEmails(allEmails, resendKey, from);
 
     return new Response(JSON.stringify({ ok: true, sent: totalSent }));
   } catch (e) {

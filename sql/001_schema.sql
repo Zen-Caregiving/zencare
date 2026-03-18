@@ -12,6 +12,7 @@ CREATE TABLE volunteers (
   phone TEXT,
   is_active BOOLEAN NOT NULL DEFAULT true,
   is_admin BOOLEAN NOT NULL DEFAULT false,
+  email_notifications BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

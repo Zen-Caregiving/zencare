@@ -357,6 +357,11 @@ async function saveAttendance() {
     }, { onConflict: 'shift_id,volunteer_id,shift_date' });
   }
 
+  // Fire away alert if volunteer marked away
+  if (status === 'away') {
+    triggerAwayAlert(shiftId, shiftDate, volunteerId);
+  }
+
   closeAttendancePopover();
   await loadWeek(currentMonday);
   renderSchedule();
@@ -365,6 +370,80 @@ async function saveAttendance() {
 function closeAttendancePopover() {
   document.getElementById('attendance-popover').classList.remove('active');
   popoverContext = null;
+}
+
+// ============================================================
+// EMAIL NOTIFICATIONS
+// ============================================================
+
+async function loadVolunteerEmail(volunteerId) {
+  const vol = volunteersCache.find(v => v.id === volunteerId);
+  const section = document.getElementById('email-section');
+  const input = document.getElementById('volunteer-email');
+  const toggle = document.getElementById('email-notif-toggle');
+  const status = document.getElementById('email-status');
+
+  section.style.display = 'block';
+  input.value = vol?.email || '';
+  toggle.checked = vol?.email_notifications !== false;
+  status.textContent = '';
+}
+
+async function saveVolunteerEmail(volunteerId) {
+  const email = document.getElementById('volunteer-email').value.trim();
+  const emailNotifications = document.getElementById('email-notif-toggle').checked;
+  const status = document.getElementById('email-status');
+
+  status.textContent = 'Saving...';
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/update-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        volunteer_id: volunteerId,
+        email: email,
+        email_notifications: emailNotifications,
+      }),
+    });
+
+    const result = await res.json();
+    if (result.ok) {
+      status.textContent = 'Saved!';
+      // Update local cache
+      const vol = volunteersCache.find(v => v.id === volunteerId);
+      if (vol) {
+        vol.email = email || null;
+        vol.email_notifications = emailNotifications;
+      }
+    } else {
+      status.textContent = 'Error: ' + (result.error || 'Unknown error');
+    }
+  } catch (e) {
+    status.textContent = 'Error: Could not save';
+  }
+}
+
+async function triggerAwayAlert(shiftId, shiftDate, volunteerId) {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/away-alert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        shift_id: shiftId,
+        shift_date: shiftDate,
+        away_volunteer_id: volunteerId,
+      }),
+    });
+  } catch (e) {
+    console.error('Away alert failed:', e);
+  }
 }
 
 // ============================================================
@@ -780,6 +859,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // My Shifts volunteer select
   document.getElementById('my-volunteer-select').addEventListener('change', (e) => {
     renderMyShifts(e.target.value);
+    if (e.target.value) {
+      loadVolunteerEmail(e.target.value);
+    } else {
+      document.getElementById('email-section').style.display = 'none';
+    }
+  });
+
+  // Email save
+  document.getElementById('save-email-btn').addEventListener('click', () => {
+    const volunteerId = document.getElementById('my-volunteer-select').value;
+    if (volunteerId) saveVolunteerEmail(volunteerId);
   });
 
   // Admin

@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zen Caregiving - Volunteer Shifts</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#5b7f5e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Zen Care">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <style>
     :root {
       --bg: #ffffff;
@@ -518,6 +524,19 @@
     </select>
 
     <div id="my-shifts-content" style="display:none">
+      <div id="email-section" class="mb-16" style="display:none">
+        <label class="text-sm text-muted">Email for shift notifications (optional)</label>
+        <div style="display:flex;gap:8px;margin-top:4px;max-width:400px">
+          <input type="email" id="volunteer-email" placeholder="you@example.com" class="my-shifts-select" style="flex:1;margin-bottom:0">
+          <button class="btn btn-primary" id="save-email-btn">Save</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="email-notif-toggle" checked style="width:18px;height:18px;accent-color:var(--accent)">
+          <span class="text-sm text-muted">Send me shift notifications</span>
+        </label>
+        <p id="email-status" class="text-muted text-sm mt-8"></p>
+      </div>
+
       <h3 class="mb-8">Preferred Shifts</h3>
       <p class="text-muted text-sm mb-8">Check the shifts you'd like to be scheduled for.</p>
       <div class="pref-grid" id="pref-grid">
@@ -744,5 +763,10 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
 </body>
 </html>

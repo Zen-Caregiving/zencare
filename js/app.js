@@ -140,35 +140,36 @@ function dismissToast(toast) {
 // ============================================================
 
 // Wrapper for PostgREST calls: sb.from('table').select/insert/update/delete()
-// Returns data on success, null on error (toast shown automatically)
+// Returns data on success (may be null for mutations), false on error.
+// Callers must check `=== false` not `=== null` since mutations return null data.
 async function sbQuery(query) {
   try {
     const { data, error } = await query;
     if (error) {
       showToast(error.message, 'error');
-      return null;
+      return false;
     }
     return data;
   } catch (e) {
     showToast('Network error — please check your connection', 'error');
-    return null;
+    return false;
   }
 }
 
 // Wrapper for Edge Function fetch calls
-// Returns parsed JSON on success, null on error (toast shown automatically)
+// Returns parsed JSON on success, false on error (toast shown automatically)
 async function sbFetch(url, options) {
   try {
     const res = await fetch(url, options);
     const result = await res.json();
     if (!res.ok || result.error) {
       showToast(result.error || 'Request failed', 'error');
-      return null;
+      return false;
     }
     return result;
   } catch (e) {
     showToast('Network error — please check your connection', 'error');
-    return null;
+    return false;
   }
 }
 
@@ -510,7 +511,7 @@ async function saveSub() {
 
   saveBtn.disabled = false;
   saveBtn.textContent = 'Save';
-  if (result === null) return;
+  if (result === false) return;
 
   showToast('Substitute assigned', 'success');
   closeSubPopover();
@@ -545,7 +546,7 @@ async function saveAttendance() {
     );
     if (existing) {
       result = await sbQuery(sb.from('attendance').delete().eq('id', existing.id));
-      if (result === null) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
+      if (result === false) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
     }
   } else {
     result = await sbQuery(sb.from('attendance').upsert({
@@ -555,7 +556,7 @@ async function saveAttendance() {
       status: status,
       notes: notes,
     }, { onConflict: 'shift_id,volunteer_id,shift_date' }));
-    if (result === null) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
+    if (result === false) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; return; }
   }
 
   // Fire away alert only when status CHANGES to away (dedup)
@@ -763,7 +764,7 @@ async function togglePreference(volunteerId, dayOfWeek, timeSlot, checked) {
       .eq('day_of_week', dayOfWeek)
       .eq('time_slot', timeSlot));
   }
-  if (result === null) return;
+  if (result === false) return;
   // Reload prefs
   const prefs = await sbQuery(sb.from('preferred_shifts').select('*'));
   preferredShiftsCache = prefs || [];
@@ -1025,7 +1026,7 @@ async function submitVolunteerForm(e) {
 
   submitBtn.disabled = false;
   submitBtn.textContent = 'Save';
-  if (result === null) return;
+  if (result === false) return;
 
   showToast(id ? 'Volunteer updated' : 'Volunteer added', 'success');
   closeModal('volunteer-modal');

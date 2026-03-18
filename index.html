@@ -469,8 +469,60 @@
     /* Loading */
     .loading { text-align: center; padding: 40px; color: var(--text-light); }
 
+    /* Loading spinner */
+    .loading-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 16px;
+    }
+    .loading-spinner::after {
+      content: '';
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* Empty state */
     .empty-state { text-align: center; padding: 24px; color: var(--text-light); font-size: 14px; }
+
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      max-width: 90vw;
+    }
+    .toast {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      pointer-events: auto;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      animation: toastIn 0.25s ease-out;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 400px;
+    }
+    .toast-success { background: var(--ok); color: white; }
+    .toast-error { background: var(--danger); color: white; }
+    .toast-info { background: var(--info); color: white; }
+    .toast.toast-out { animation: toastOut 0.2s ease-in forwards; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(12px); } }
   </style>
 </head>
 <body>
@@ -500,6 +552,7 @@
       <button id="next-week">Next &rarr;</button>
     </div>
 
+    <div id="schedule-loading" class="loading-spinner"></div>
     <div id="day-accordion" class="day-accordion"></div>
 
     <table class="week-grid" id="week-grid">
@@ -759,6 +812,9 @@
       </form>
     </div>
   </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>

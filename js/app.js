@@ -26,6 +26,63 @@ let adminMonday = getMonday(new Date());
 let adminAttendanceCache = [];
 
 // ============================================================
+// TOAST NOTIFICATIONS
+// ============================================================
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.addEventListener('click', () => dismissToast(toast));
+  container.appendChild(toast);
+  setTimeout(() => dismissToast(toast), 3000);
+}
+
+function dismissToast(toast) {
+  if (toast.classList.contains('toast-out')) return;
+  toast.classList.add('toast-out');
+  toast.addEventListener('animationend', () => toast.remove());
+}
+
+// ============================================================
+// SUPABASE WRAPPERS
+// ============================================================
+
+// Wrapper for PostgREST calls: sb.from('table').select/insert/update/delete()
+// Returns data on success, null on error (toast shown automatically)
+async function sbQuery(query) {
+  try {
+    const { data, error } = await query;
+    if (error) {
+      showToast(error.message, 'error');
+      return null;
+    }
+    return data;
+  } catch (e) {
+    showToast('Network error — please check your connection', 'error');
+    return null;
+  }
+}
+
+// Wrapper for Edge Function fetch calls
+// Returns parsed JSON on success, null on error (toast shown automatically)
+async function sbFetch(url, options) {
+  try {
+    const res = await fetch(url, options);
+    const result = await res.json();
+    if (!res.ok || result.error) {
+      showToast(result.error || 'Request failed', 'error');
+      return null;
+    }
+    return result;
+  } catch (e) {
+    showToast('Network error — please check your connection', 'error');
+    return null;
+  }
+}
+
+// ============================================================
 // INIT
 // ============================================================
 
@@ -54,6 +111,11 @@ async function init() {
 
   await loadBaseData();
   await loadWeek(currentMonday);
+
+  // Hide loading spinner, show content
+  const spinner = document.getElementById('schedule-loading');
+  if (spinner) spinner.style.display = 'none';
+
   renderSchedule();
   populateVolunteerDropdowns();
   updateAuthStatus();

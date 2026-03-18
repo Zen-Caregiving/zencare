@@ -523,6 +523,17 @@
     .toast.toast-out { animation: toastOut 0.2s ease-in forwards; }
     @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(12px); } }
+
+    /* Offline indicator */
+    .offline-bar {
+      display: none;
+      background: var(--warn);
+      color: #333;
+      text-align: center;
+      padding: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -533,6 +544,8 @@
       <span id="auth-status" class="text-sm"></span>
     </div>
   </div>
+
+  <div id="offline-indicator" class="offline-bar">You are offline — changes will sync when reconnected</div>
 
   <div class="tabs">
     <button class="tab-btn active" data-page="schedule">Schedule</button>
@@ -547,7 +560,10 @@
       <button id="prev-week">&larr; Prev</button>
       <div style="text-align:center">
         <div class="week-label" id="week-label"></div>
-        <button class="today-btn" id="today-btn">Today</button>
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:4px">
+          <button class="today-btn" id="today-btn">Today</button>
+          <button class="today-btn" id="copy-schedule-btn" style="background:var(--info) !important;border-color:var(--info) !important">Copy</button>
+        </div>
       </div>
       <button id="next-week">Next &rarr;</button>
     </div>
@@ -629,6 +645,9 @@
         <button id="admin-next-week">Next &rarr;</button>
       </div>
       <div class="admin-cards" id="admin-overview"></div>
+
+      <h3 class="mt-16 mb-8">Attendance Trends (4 weeks)</h3>
+      <div id="admin-trends"></div>
 
       <div style="display:flex;justify-content:space-between;align-items:center" class="mt-16 mb-8">
         <h3>Volunteers</h3>
@@ -810,6 +829,18 @@
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ==================== SHIFT ASSIGNMENT MODAL ==================== -->
+  <div class="modal-overlay" id="shift-assign-modal">
+    <div class="modal">
+      <h3 id="shift-assign-title">Shift Assignments</h3>
+      <p class="text-muted text-sm mb-16">Check the shifts this volunteer is assigned to.</p>
+      <div class="pref-grid" id="shift-assign-grid"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('shift-assign-modal')">Done</button>
+      </div>
     </div>
   </div>
 

@@ -26,6 +26,96 @@ let adminMonday = getMonday(new Date());
 let adminAttendanceCache = [];
 
 // ============================================================
+// OFFLINE QUEUE
+// ============================================================
+//
+//  WRITE ──► [online?]
+//              │    │
+//              Y    N
+//              │    │
+//              ▼    ▼
+//           Supabase  localStorage queue
+//                        │
+//                   [online event]
+//                        │
+//                   replay queue FIFO
+//
+
+const OFFLINE_QUEUE_KEY = 'zencare_offline_queue';
+
+function getOfflineQueue() {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+  } catch { return []; }
+}
+
+function addToOfflineQueue(entry) {
+  try {
+    const queue = getOfflineQueue();
+    queue.push({ ...entry, timestamp: Date.now() });
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  } catch (e) {
+    // localStorage full — show toast (critical gap fix)
+    showToast('Offline storage full — changes may be lost', 'error');
+  }
+}
+
+async function replayOfflineQueue() {
+  const queue = getOfflineQueue();
+  if (queue.length === 0) return;
+
+  let replayed = 0;
+  const failed = [];
+
+  for (const entry of queue) {
+    try {
+      if (entry.type === 'attendance') {
+        const { error } = await sb.from('attendance').upsert(entry.data, {
+          onConflict: 'shift_id,volunteer_id,shift_date',
+        });
+        if (error) { failed.push(entry); continue; }
+      } else if (entry.type === 'attendance_delete') {
+        const { error } = await sb.from('attendance').delete().eq('id', entry.id);
+        if (error) { failed.push(entry); continue; }
+      } else if (entry.type === 'preference_upsert') {
+        const { error } = await sb.from('preferred_shifts').upsert(entry.data, {
+          onConflict: 'volunteer_id,day_of_week,time_slot',
+        });
+        if (error) { failed.push(entry); continue; }
+      } else if (entry.type === 'preference_delete') {
+        const { error } = await sb.from('preferred_shifts')
+          .delete()
+          .eq('volunteer_id', entry.volunteer_id)
+          .eq('day_of_week', entry.day_of_week)
+          .eq('time_slot', entry.time_slot);
+        if (error) { failed.push(entry); continue; }
+      }
+      replayed++;
+    } catch {
+      failed.push(entry);
+    }
+  }
+
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(failed));
+
+  if (replayed > 0) {
+    showToast(`Synced ${replayed} offline change${replayed > 1 ? 's' : ''}`, 'success');
+    await loadWeek(currentMonday);
+    renderSchedule();
+  }
+  if (failed.length > 0) {
+    showToast(`${failed.length} change${failed.length > 1 ? 's' : ''} failed to sync`, 'error');
+  }
+}
+
+function updateOnlineStatus() {
+  const indicator = document.getElementById('offline-indicator');
+  if (indicator) {
+    indicator.style.display = navigator.onLine ? 'none' : 'block';
+  }
+}
+
+// ============================================================
 // TOAST NOTIFICATIONS
 // ============================================================
 
@@ -307,6 +397,40 @@ function renderShiftChips(dayOfWeek, timeSlot, dateStr) {
 
 function toggleDay(header) {
   header.parentElement.classList.toggle('open');
+}
+
+function copyScheduleToClipboard() {
+  let text = `Zen Care — Week of ${document.getElementById('week-label').textContent}\n\n`;
+  for (let d = 0; d < 5; d++) {
+    const date = addDays(currentMonday, d);
+    text += `${DAY_NAMES[d]} ${fmtDateShort(date)}\n`;
+    for (const slot of SLOT_NAMES) {
+      const shift = shiftsCache.find(s => s.day_of_week === d && s.time_slot === slot);
+      if (!shift) continue;
+      const assigned = assignmentsCache
+        .filter(a => a.shift_id === shift.id)
+        .map(a => volunteersCache.find(v => v.id === a.volunteer_id))
+        .filter(Boolean);
+      if (assigned.length === 0) continue;
+      const dateStr = fmtDateISO(date);
+      const names = assigned.map(v => {
+        const att = attendanceCache.find(a =>
+          a.shift_id === shift.id && a.volunteer_id === v.id && a.shift_date === dateStr
+        );
+        const status = att?.status || 'attending';
+        if (status === 'away') return `${v.first_name} (away)`;
+        if (status === 'late') return `${v.first_name} (late)`;
+        return v.first_name;
+      });
+      text += `  ${SLOT_LABELS[slot]}: ${names.join(', ')}\n`;
+    }
+    text += '\n';
+  }
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    showToast('Schedule copied to clipboard', 'success');
+  }).catch(() => {
+    showToast('Failed to copy', 'error');
+  });
 }
 
 // ============================================================
@@ -601,11 +725,22 @@ function renderMyWeekSummary(volunteerId) {
       );
       const status = att?.status || 'attending';
 
+      // Shift partners: other volunteers assigned to this same shift
+      const partners = assignmentsCache
+        .filter(a => a.shift_id === shift.id && a.volunteer_id !== volunteerId)
+        .map(a => volunteersCache.find(v => v.id === a.volunteer_id))
+        .filter(Boolean)
+        .map(v => esc(v.first_name));
+      const partnerText = partners.length > 0
+        ? `<div class="text-muted text-sm" style="padding:0 16px 8px">with ${partners.join(', ')}</div>`
+        : '';
+
       html += `<div class="day-section" style="margin-bottom:4px">
         <div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center">
           <span>${DAY_NAMES[d]} ${SLOT_LABELS[slot]} <span class="text-muted text-sm">${fmtDateShort(date)}</span></span>
           <span class="chip chip-${status}" style="cursor:default">${status}</span>
         </div>
+        ${partnerText}
       </div>`;
     }
   }
@@ -675,6 +810,7 @@ async function showAdminContent() {
   document.getElementById('admin-content').style.display = 'block';
   await loadAdminWeek(adminMonday);
   renderVolunteerTable();
+  renderAttendanceTrends();
 }
 
 function hideAdminContent() {
@@ -757,6 +893,62 @@ function renderAdminOverview() {
   `;
 }
 
+async function renderAttendanceTrends() {
+  const container = document.getElementById('admin-trends');
+  if (!container) return;
+
+  // Load 4 weeks of attendance data
+  const weeks = [];
+  for (let w = 3; w >= 0; w--) {
+    const monday = addDays(adminMonday, -7 * w);
+    const friday = addDays(monday, 4);
+    const mondayStr = fmtDateISO(monday);
+    const fridayStr = fmtDateISO(friday);
+
+    const att = await sbQuery(sb.from('attendance').select('*')
+      .gte('shift_date', mondayStr)
+      .lte('shift_date', fridayStr));
+
+    let expected = 0, present = 0, awayCount = 0;
+    for (let d = 0; d < 5; d++) {
+      for (const slot of SLOT_NAMES) {
+        const shift = shiftsCache.find(s => s.day_of_week === d && s.time_slot === slot);
+        if (!shift) continue;
+        const assigned = assignmentsCache.filter(a => a.shift_id === shift.id);
+        expected += assigned.length;
+        const dateStr = fmtDateISO(addDays(monday, d));
+        for (const a of assigned) {
+          const rec = (att || []).find(r =>
+            r.shift_id === shift.id && r.volunteer_id === a.volunteer_id && r.shift_date === dateStr
+          );
+          if (rec?.status === 'away') awayCount++;
+          else present++;
+        }
+      }
+    }
+    const rate = expected > 0 ? Math.round((present / expected) * 100) : 0;
+    weeks.push({
+      label: fmtDateShort(monday),
+      expected, present, away: awayCount, rate,
+    });
+  }
+
+  // Render as a simple bar chart using CSS
+  const maxExpected = Math.max(...weeks.map(w => w.expected), 1);
+  let html = '<div style="display:flex;gap:12px;align-items:flex-end;height:120px;margin-top:12px">';
+  for (const week of weeks) {
+    const height = Math.round((week.present / maxExpected) * 100);
+    const barColor = week.rate >= 80 ? 'var(--ok)' : week.rate >= 60 ? 'var(--warn)' : 'var(--danger)';
+    html += `<div style="flex:1;text-align:center">
+      <div style="font-size:18px;font-weight:700;color:${barColor}">${week.rate}%</div>
+      <div style="background:${barColor};height:${height}px;border-radius:4px 4px 0 0;margin:4px auto;width:100%;max-width:60px;opacity:0.7"></div>
+      <div class="text-sm text-muted">${week.label}</div>
+    </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 function renderVolunteerTable() {
   const tbody = document.getElementById('vol-table-body');
   const allVols = [...volunteersCache].sort((a, b) => {
@@ -779,7 +971,10 @@ function renderVolunteerTable() {
       <td><strong>${esc(v.first_name)}</strong></td>
       <td><span class="badge ${v.is_active ? 'badge-active' : 'badge-inactive'}">${v.is_active ? 'Active' : 'Inactive'}</span></td>
       <td class="text-sm text-muted">${shifts || '—'}</td>
-      <td><button class="btn btn-secondary text-sm" onclick="editVolunteer('${v.id}')" style="padding:4px 10px;font-size:12px">Edit</button></td>
+      <td>
+        <button class="btn btn-secondary text-sm" onclick="editVolunteer('${v.id}')" style="padding:4px 10px;font-size:12px">Edit</button>
+        <button class="btn btn-secondary text-sm" onclick="openShiftAssignment('${v.id}')" style="padding:4px 10px;font-size:12px;margin-left:4px">Shifts</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -837,6 +1032,55 @@ async function submitVolunteerForm(e) {
   await loadBaseData();
   renderVolunteerTable();
   populateVolunteerDropdowns();
+  renderSchedule();
+}
+
+// ============================================================
+// SHIFT ASSIGNMENT MANAGEMENT
+// ============================================================
+
+function openShiftAssignment(volunteerId) {
+  const vol = volunteersCache.find(v => v.id === volunteerId);
+  if (!vol) return;
+
+  document.getElementById('shift-assign-title').textContent = `Shift Assignments — ${vol.first_name}`;
+  const grid = document.getElementById('shift-assign-grid');
+
+  const volAssignments = assignmentsCache.filter(a => a.volunteer_id === volunteerId);
+
+  let html = '<div></div><div class="pref-header">Morning</div><div class="pref-header">Afternoon</div><div class="pref-header">Evening</div>';
+  for (let d = 0; d < 5; d++) {
+    html += `<div class="pref-day">${DAY_NAMES[d]}</div>`;
+    for (const slot of SLOT_NAMES) {
+      const shift = shiftsCache.find(s => s.day_of_week === d && s.time_slot === slot);
+      if (!shift) { html += '<div class="pref-cell">—</div>'; continue; }
+      const isAssigned = volAssignments.some(a => a.shift_id === shift.id);
+      html += `<div class="pref-cell">
+        <input type="checkbox" ${isAssigned ? 'checked' : ''}
+          onchange="toggleShiftAssignment('${volunteerId}', '${shift.id}', this.checked)">
+      </div>`;
+    }
+  }
+  grid.innerHTML = html;
+  openModal('shift-assign-modal');
+}
+
+async function toggleShiftAssignment(volunteerId, shiftId, assigned) {
+  if (assigned) {
+    await sbQuery(sb.from('shift_assignments').upsert({
+      shift_id: shiftId,
+      volunteer_id: volunteerId,
+      is_active: true,
+    }, { onConflict: 'shift_id,volunteer_id' }));
+  } else {
+    await sbQuery(sb.from('shift_assignments')
+      .delete()
+      .eq('shift_id', shiftId)
+      .eq('volunteer_id', volunteerId));
+  }
+  // Reload assignments
+  await loadBaseData();
+  renderVolunteerTable();
   renderSchedule();
 }
 
@@ -1002,4 +1246,18 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   });
+
+  // Online/offline handling
+  updateOnlineStatus();
+  window.addEventListener('online', () => {
+    updateOnlineStatus();
+    replayOfflineQueue();
+  });
+  window.addEventListener('offline', updateOnlineStatus);
+
+  // Copy schedule button
+  const copyBtn = document.getElementById('copy-schedule-btn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', copyScheduleToClipboard);
+  }
 });
